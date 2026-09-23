@@ -13,12 +13,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let body = '';
-  req.on('data', chunk => body += chunk);
+  let body = [];
+  req.on('data', chunk => body.push(chunk));
   req.on('end', () => {
+    const rawBuffer = Buffer.concat(body);
+    const bodyString = rawBuffer.toString('utf-8');
+
     if (req.url === '/api/chat' && req.method === 'POST') {
       try {
-        const { sessionId, message, imageData, imageName } = JSON.parse(body || '{}');
+        const { sessionId, message, imageData, imageName } = JSON.parse(bodyString || '{}');
         const lower = (message || '').toLowerCase();
         let reply = '';
 
@@ -40,6 +43,13 @@ const server = http.createServer((req, res) => {
                   `1. Desolder defective component using hot air station (350°C) or soldering iron.\n` +
                   `2. Test adjacent flyback diode & MOSFET for short-circuits using multimeter continuity mode.\n` +
                   `3. Solder low-ESR replacement with correct polarity matching PCB silkscreen stripe.`;
+        } else if (lower.includes('brochure') || lower.includes('pdf') || lower.includes('company') || lower.includes('catalog')) {
+          reply = `📄 **[ChromaDB Vector Retrieval: PDF Company Brochure]**\n\n` +
+                  `### Extracted Context from Ingested PDF Brochure:\n` +
+                  `- **Company / Product:** MechFix Solutions Hardware Line\n` +
+                  `- **Featured Equipment:** Industrial Power Controllers, Low-ESR Filter Modules & Smart Sensor Arrays\n` +
+                  `- **Warranty & Service:** 2-Year Full Hardware Warranty with 24/7 Diagnostics Support\n\n` +
+                  `> *Agent Capability:* I can query all extracted sections, parts tables, and troubleshooting procedures from your uploaded PDF brochures.`;
         } else if (lower.includes('capacitor') || lower.includes('1000uf') || lower.includes('swollen')) {
           reply = `🔍 **[ChromaDB Vector Retrieval: Capacitor Failure Analysis]**\n\n` +
                   `### Defect Summary:\n` +
@@ -55,20 +65,10 @@ const server = http.createServer((req, res) => {
                   `🌐 **[Tool Call: webSearchTroubleshooting("IRF3205 substitute")]**\n` +
                   `- **Direct Equivalents:** STP75NF75, HY1908, FQP30N06L.\n` +
                   `- **Repair Tip:** Always replace gate resistor (10Ω) and driver IC when replacing a blown MOSFET.`;
-        } else if (lower.includes('ne555') || lower.includes('ic') || lower.includes('pinout')) {
-          reply = `🛠️ **[Tool Call: searchComponentSpecs("NE555")]**\n\n` +
-                  `- **Specs:** Precision Timer IC, Vcc=4.5V to 15V, Max Iout=200mA.\n` +
-                  `- **Pinouts:** Pin 1: GND | Pin 2: TRIG | Pin 3: OUT | Pin 4: RESET | Pin 8: VCC.\n` +
-                  `- **Troubleshooting:** If Pin 3 stays fixed HIGH, check if Pin 2 (TRIG) is tied below 1/3 Vcc or Pin 4 (RESET) is grounded.`;
-        } else if (lower.includes('resistor') || lower.includes('led') || lower.includes('calculate')) {
-          reply = `🛠️ **[Tool Call: calculateLedResistor(vcc=12, vf=3.2, currentmA=20)]**\n\n` +
-                  `- **Calculated Resistor:** 440.0 Ω\n` +
-                  `- **Standard Resistor Value:** 470 Ω (1/4 Watt)\n` +
-                  `- **Power Dissipation:** 0.155 W`;
         } else {
           reply = `⚡ **MechFixAI Diagnostic Engine**\n\n` +
                   `Received query: "${message}"\n\n` +
-                  `I can look up component datasheets in **Chroma DB**, search the **Web** for replacements, or analyze an uploaded image of a defective electronic part.`;
+                  `I can query **Chroma DB** for text & PDF brochure contents, search the **Web** for replacements, or analyze an uploaded image of a defective part.`;
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -80,6 +80,14 @@ const server = http.createServer((req, res) => {
     } else if (req.url === '/api/ingest' && req.method === 'POST') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: "Datasheet & schematics successfully embedded into ChromaDB!" }));
+    } else if (req.url === '/api/ingest-pdf' && req.method === 'POST') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        message: "PDF Company Brochure successfully parsed & embedded into ChromaDB!",
+        filename: "Company_Brochure.pdf",
+        pages: 8,
+        status: "SUCCESS"
+      }));
     } else if (req.url === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: "UP", service: "MechFixAI Diagnostics Engine (Dev Server)" }));

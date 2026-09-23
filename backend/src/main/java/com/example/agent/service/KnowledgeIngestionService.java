@@ -8,11 +8,16 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
 
 @Service
 public class KnowledgeIngestionService {
@@ -39,7 +44,32 @@ public class KnowledgeIngestionService {
                 .build();
 
         ingestor.ingest(document);
-        log.info("Successfully ingested document '{}' into ChromaDB", textTitle);
+        log.info("Successfully ingested text document '{}' into ChromaDB", textTitle);
+    }
+
+    public int ingestPdfStream(String pdfTitle, InputStream pdfInputStream) throws Exception {
+        try (PDDocument pdDocument = Loader.loadPDF(pdfInputStream.readAllBytes())) {
+            int pageCount = pdDocument.getNumberOfPages();
+            PDFTextStripper stripper = new PDFTextStripper();
+            String extractedText = stripper.getText(pdDocument);
+
+            if (extractedText == null || extractedText.isBlank()) {
+                throw new IllegalArgumentException("Extracted PDF text is empty or unreadable.");
+            }
+
+            Document document = Document.from(extractedText);
+            DocumentSplitter splitter = DocumentSplitters.recursive(300, 30);
+
+            EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
+                    .documentSplitter(splitter)
+                    .embeddingModel(embeddingModel)
+                    .embeddingStore(embeddingStore)
+                    .build();
+
+            ingestor.ingest(document);
+            log.info("Successfully ingested PDF '{}' ({} pages, {} chars) into ChromaDB", pdfTitle, pageCount, extractedText.length());
+            return pageCount;
+        }
     }
 
     @EventListener(ApplicationReadyEvent.class)

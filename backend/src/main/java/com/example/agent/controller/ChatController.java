@@ -2,8 +2,10 @@ package com.example.agent.controller;
 
 import com.example.agent.service.ElectronicsDiagnosticAgent;
 import com.example.agent.service.KnowledgeIngestionService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 import java.util.UUID;
@@ -50,6 +52,32 @@ public class ChatController {
         String title = (request.title() == null || request.title().isBlank()) ? "Component Datasheet" : request.title();
         ingestionService.ingestText(title, request.content());
         return ResponseEntity.ok(Map.of("message", "Datasheet successfully ingested into ChromaDB!"));
+    }
+
+    @PostMapping(value = "/ingest-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> ingestPdf(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title) {
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "PDF file is required and cannot be empty"));
+        }
+
+        String documentTitle = (title != null && !title.isBlank()) ? title : file.getOriginalFilename();
+
+        try {
+            int pagesParsed = ingestionService.ingestPdfStream(documentTitle, file.getInputStream());
+            return ResponseEntity.ok(Map.of(
+                    "message", "PDF Brochure successfully parsed and embedded into ChromaDB!",
+                    "filename", file.getOriginalFilename(),
+                    "pages", pagesParsed,
+                    "status", "SUCCESS"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "error", "Failed to extract and embed PDF: " + e.getMessage()
+            ));
+        }
     }
 
     @GetMapping("/health")
